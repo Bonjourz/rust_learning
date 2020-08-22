@@ -1,216 +1,259 @@
-use std::rc::Rc;    // smart pointer with ref counters
-use std::cell::RefCell;
+use std::rc::Rc;
 use std::clone::Clone;
+use std::cell::RefCell;
+// use core::mem::drop;
 
 #[derive(Debug)]
 struct ListNode {
-    value : i32,
-    next : Option<Rc<RefCell<ListNode>>>,
-    prev : Option<Rc<RefCell<ListNode>>>
+    val : i64,
+    prev : Option<Rc<RefCell<ListNode>>>,
+    next : Option<Rc<RefCell<ListNode>>>
 }
 
 #[derive(Debug)]
-pub struct List {
-    count : i32,
-    first : Option<Rc<RefCell<ListNode>>>,
-    last : Option<Rc<RefCell<ListNode>>>
+struct List {
+    count : i64,
+    head : Option<Rc<RefCell<ListNode>>>,
+    tail : Option<Rc<RefCell<ListNode>>>
 }
 
 impl ListNode {
-    pub fn new(value : i32) -> Rc<RefCell<ListNode>> {
-        let pointer = Rc::new(RefCell::new(ListNode{
-            value,
-            next : None,
-            prev : None,
-        }));
-        Rc::clone(&pointer)
+    pub fn new(val: i64) -> Self {
+        ListNode {
+            val: val,
+            prev: None,
+            next: None
+        }
     }
-
 }
 
 impl List {
-    pub fn new() -> List {
-        let first = ListNode::new(0);
-        let last = ListNode::new(0);
-        first.borrow_mut().next = Some(Rc::clone(&last));
-        last.borrow_mut().prev = Some(Rc::clone(&first));
-        println!("pointer count: {}", Rc::strong_count(&first));
-        let res = List {
+    pub fn new() -> Self {
+        let head = Rc::new(RefCell::new(ListNode::new(-1)));
+        let tail = Rc::new(RefCell::new(ListNode::new(-1)));
+        head.borrow_mut().next = Some(Rc::clone(&tail));
+        tail.borrow_mut().prev = Some(Rc::clone(&head));
+        List {
             count: 0,
-            first: Some(first),
-            last: Some(last),
-        };
-        //println!("pointer count: {}", Rc::strong_count(&first));
-        res
-    }
-
-    pub fn list_count(&self) -> i32 {
-        self.count
-    }
-
-    pub fn list_push(&mut self, value : i32) {
-        let node = ListNode::new(value);
-
-        if let Some(ref l) = self.last {
-            let mut n = node.borrow_mut();
-            n.next = Some(Rc::clone(&l));
-            if let Some(ref p) = l.borrow().prev {
-                n.prev = Some(Rc::clone(&p));
-                p.borrow_mut().next = Some(Rc::clone(&node));
-            };
-
-            l.borrow_mut().prev = Some(Rc::clone(&node));
-        };
-        self.count = self.count + 1;
-    }
-
-    pub fn list_pop(&mut self) -> i32 {
-        if self.count == 0 {
-            panic!("No Items for pop!");
+            head: Some(head),
+            tail: Some(tail)
         }
-        let mut value = 0;
-        let mut pointer_pnext = None;
-        if let Some(ref l) = self.last {
-            if let Some(ref p) = l.borrow().prev {
-                if let Some(ref pnext) = p.borrow().prev {
-                    pointer_pnext = Some(Rc::clone(&pnext));
-                    pnext.borrow_mut().next = Some(Rc::clone(&l));
-                }
-                value = p.borrow().value;
-            };
-            l.borrow_mut().prev = pointer_pnext;
-        };
-        self.count = self.count-1;
-        value
     }
 
-    pub fn list_shift(&mut self) -> i32 {
-        if self.count == 0 {
-            panic!("No Items for pop!");
+    pub fn walk_list(&self) {
+        let mut node_iter: Rc<RefCell<ListNode>> = Rc::clone(self.head.as_ref().unwrap());
+        let count = self.count;
+        print!("head");
+        // println!("self.tail {:?}", self.tail.as_ref().unwrap().borrow().prev.as_ref().unwrap().borrow().val);
+        for _i in 1..=count {
+            let node = Rc::clone(&node_iter);
+            //println!("[{}] {}", i, node.borrow().val);
+            if node.borrow().next.is_some() {
+                node_iter = Rc::clone(node.borrow().next.as_ref().unwrap());
+                print!("->{}", node_iter.borrow().val);
+            }
         }
+        print!("\n");
+    }
 
-        let mut value = 0;
-        let mut pointer_pnext = None;
-        if let Some(ref f) = self.first {
-            if let Some(ref p) = f.borrow().next {
-                if let Some (ref pnext) = p.borrow().next {
-                    pointer_pnext = Some(Rc::clone(&pnext));
-                    pnext.borrow_mut().prev = Some(Rc::clone(&f));
+    pub fn at(&self, index : i64) -> i64 {
+        if index > self.count {
+            println!("No nodes");
+            -1
+        } else {
+            let mut val : i64 = -1;
+            let mut node_iter : Rc<RefCell<ListNode>> = Rc::clone(self.head.as_ref().unwrap());
+            for _i in 1..=index {
+                let node = Rc::clone(&node_iter);
+                if node.borrow().next.is_some() {
+                    node_iter = Rc::clone(node.borrow().next.as_ref().unwrap());
+                    val = node_iter.borrow_mut().val;
                 }
-                value = p.borrow().value;
-            };
-            f.borrow_mut().next = pointer_pnext;
-        };
-        self.count = self.count - 1;
-        value
+            }
+            val
+        }
     }
 
+    pub fn insert_after(&mut self, index : i64, val : i64) {
+        if index > self.count {
+            println!("No nodes");
+        } else {
+            let new_node = Rc::new(RefCell::new(ListNode::new(val)));
+            let mut node_iter : Rc<RefCell<ListNode>> = Rc::clone(self.head.as_ref().unwrap());
+            for _i in 1..index {
+                let node = Rc::clone(&node_iter);
+                if node.borrow().next.is_some() {
+                    node_iter = Rc::clone(node.borrow().next.as_ref().unwrap());
+                }
+            }
 
-    pub fn list_unshift(&mut self, value:i32){
-        let node = ListNode::new(value);
-        if let Some(ref f) = self.first {
-            let mut n = node.borrow_mut();
-            n.prev = Some(Rc::clone(&f));
-            if let Some(ref p) = f.borrow().next {
-                n.next = Some(Rc::clone(&p));
-                p.borrow_mut().prev = Some(Rc::clone(&node));
-            };
-            f.borrow_mut().next = Some(Rc::clone(&node));
-        };
-        self.count = self.count+1;
+            // Inset after node iter
+            if let Some(ref _next) = node_iter.borrow().next {
+                _next.borrow_mut().prev = Some(Rc::clone(&new_node));
+                new_node.borrow_mut().next = Some(Rc::clone(_next));
+            }
+
+            node_iter.borrow_mut().next = Some(Rc::clone(&new_node));
+            new_node.borrow_mut().prev = Some(Rc::clone(&node_iter));
+            self.count += 1;
+        }
     }
+
+    pub fn take_out(&mut self, val : i64) -> bool {
+        if self.count == 0 {
+            println!("No nodes!");
+            false
+        } else {
+            let mut find = false;
+            let mut tmp : Option<Rc<RefCell<ListNode>>>= None;
+            let mut node_iter : Rc<RefCell<ListNode>> = Rc::clone(self.head.as_ref().unwrap());
+            for _i in 1..=self.count {
+                if node_iter.borrow().val == val {
+                    if let Some(ref _next) = node_iter.borrow().next {
+                        if let Some(ref _prev) = node_iter.borrow().prev {
+                            _prev.borrow_mut().next = Some(Rc::clone(_next));
+                            tmp = Some(Rc::clone(_prev));
+                        }
+                        _next.borrow_mut().prev = tmp;
+                    }
+                    
+                    find = true;
+                    self.count -= 1;
+                    break;
+                }
+
+                let node = Rc::clone(&node_iter);
+                if node.borrow().next.is_some() {
+                    node_iter = Rc::clone(node.borrow().next.as_ref().unwrap());
+                }
+            };
+            find
+        }
+    }
+
+    pub fn push_back(&mut self, val: i64) {
+        let new_node = Rc::new(RefCell::new(ListNode::new(val)));
+        if let Some(ref _next) = self.tail {
+            if let Some(ref _prev) = _next.borrow_mut().prev {
+                _prev.borrow_mut().next = Some(Rc::clone(&new_node));
+                new_node.borrow_mut().prev = Some(Rc::clone(_prev));
+            }
+            new_node.borrow_mut().next = Some(Rc::clone(_next));
+            _next.borrow_mut().prev = Some(Rc::clone(&new_node));
+        }
+        self.count += 1;
+    }
+
+    pub fn pop_back(&mut self) -> i64 {
+        if self.count == 0 {
+            println!("No nodes");
+            -1
+        } else {
+            let mut val : i64 = -1;
+            let mut tmp = None;
+            if let Some(ref _tail) = self.tail {
+                if let Some(ref _target) = _tail.borrow().prev {
+                    val = _target.borrow().val;
+                    if let Some(ref _prev) = _target.borrow().prev {
+                        _prev.borrow_mut().next = Some(Rc::clone(_tail));
+                        tmp = Some(Rc::clone(_prev));
+                    }
+                    // _target.borrow_mut().next = Some(None);
+                    // _target.borrow_mut().prev = Some(None);
+                }
+                _tail.borrow_mut().prev = tmp;
+            }
+            self.count -= 1;
+            val
+        }
+    }
+
+    pub fn push_front(&mut self, val : i64) {
+        let new_node = Rc::new(RefCell::new(ListNode::new(val)));
+        if let Some(ref _head) = self.head {
+            if let Some(ref _next) = _head.borrow().next {
+                _next.borrow_mut().prev = Some(Rc::clone(&new_node));
+                new_node.borrow_mut().next = Some(Rc::clone(&_next));
+            }
+            _head.borrow_mut().next = Some(Rc::clone(&new_node));
+            new_node.borrow_mut().prev = Some(Rc::clone(&_head));
+        }
+        self.count += 1;
+    }
+
+    pub fn pop_front(&mut self) -> i64 {
+        if self.count == 1 {
+            println!("No nodes");
+            -1
+        } else {
+            let mut tmp = None;
+            let mut val : i64 = -1;
+            if let Some(ref _head) = self.head {
+                if let Some(ref _target) = _head.borrow().next {
+                    if let Some(ref _next) = _target.borrow().next {
+                        _next.borrow_mut().prev = Some(Rc::clone(&_head));
+                        tmp = Some(Rc::clone(&_next));
+                    }
+                    val = _target.borrow().val;
+                }
+                _head.borrow_mut().next = tmp;
+                // println!("drop here2");
+            }
+            self.count -= 1;
+            val
+        }
+    }
+}
+
+impl Drop for ListNode {
+    fn drop(&mut self) {
+        println!("Dropping CustomSmartPointer with val = {}", self.val);
+    }
+}
+
+// #[cfg(test)]
+
+// mod test {
+//     use super::*;
+
+//     #[test]
     
-    pub fn list_first(&self) -> i32 {
-        if self.count == 0 {
-            panic!("No Items!");
-        }
-        let mut value = 0;
-        if let Some(ref l) = self.first {
-            if let Some(ref p) = l.borrow().next {
-                value = p.borrow().value;
-            };
-        }
-        value
-    }
 
-    pub fn list_last(&self) -> i32 {
-        if self.count == 0 {
-            panic!("No Items!");
-        }
-        let mut value = 0;
-        if let Some(ref l) = self.last {
-            if let Some(ref p) = l.borrow().prev {
-                value = p.borrow().value;
-            };
-        }
-        value
-    }
+//     #[test]
+// }
 
-    pub fn list_clear(&mut self) {
-        while self.count > 0 {
-            self.list_pop();
-        }
-    }
-
+fn test_new(){
+    let _list = List::new();
 }
 
-#[cfg(test)]
-mod test {
-    use super::*;
-    #[test]
-    fn test_push_pop(){
-        let mut a = List::new();
-        a.list_push(1);
-        a.list_push(2);
-        assert_eq!(a.list_pop(),2);
-        assert_eq!(a.list_pop(),1);
-    }
+fn test_push_back() {
+    let mut list = List::new();
+    list.push_back(1);
+    list.push_back(2);
+    list.push_back(3);
+    list.walk_list();
+    
+    list.pop_back();
+    list.walk_list();
+    
+    list.push_front(4);
+    list.push_front(5);
+    list.push_front(6);
+    list.walk_list();
 
-    #[test]
-    fn test_shift(){
-        let mut a = List::new();
-        a.list_unshift(3);
-        a.list_unshift(1);
-        a.list_unshift(2);
-        assert_eq!(a.list_shift(),2);
-        assert_eq!(a.list_shift(),1);
-    }
+    list.pop_front();
+    list.walk_list();
 
-    #[test]
-    fn test_shift_push(){
-        let mut a = List::new();
-        a.list_push(1);
-        a.list_push(2);
-        assert_eq!(a.list_shift(),1);
-        assert_eq!(a.list_shift(),2);
-    }
+    list.insert_after(3, 9);
+    list.walk_list();
+    println!("index {} = {}", 2, list.at(2));
 
-    #[test]
-    fn test_clear(){
-        let mut a = List::new();
-        a.list_push(1);
-        a.list_push(2);
-        a.list_clear();
-        assert_eq!(a.list_count(),0);
-    }
-
-    #[test]
-    #[should_panic]
-    fn test_pop_empty(){
-        let mut a = List::new();
-        a.list_push(1);
-        a.list_pop();
-        a.list_pop();
-    }
-
-    #[test]
-    fn test_first_last(){
-        let mut a = List::new();
-        a.list_push(1);
-        a.list_push(2);
-        a.list_push(3);
-        assert_eq!(a.list_first(),1);
-        assert_eq!(a.list_last(),3);
-    }
+    list.take_out(9);
+    list.walk_list();
 }
 
+fn main() {
+    let _list = List::new();
+    test_push_back();
+    println!("after test push_back");
+}
